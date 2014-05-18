@@ -1,0 +1,10 @@
+upstream %host% {
+	server %ip%;
+}
+server {
+	server_name %host%;
+	location / {
+    		proxy_pass http://%host%;
+		include /etc/nginx/proxy_params;
+	}
+}
