@@ -10,8 +10,14 @@ get_docker() {
     nc -U $DOCKER_HOST | sed '1,/^\r$/d'
 }
 
+get_env_value() {
+    echo -e "GET /containers/$1/json HTTP/1.1\r\n" | get_docker | $JQ '.Config.Env[]' | egrep "^$2=" | cut -d'=' -f2
+}
+
 get_virtual_host() {
-    echo -e "GET /containers/$1/json HTTP/1.1\r\n" | get_docker | $JQ '.Config.Env[]' | egrep '^VIRTUAL_HOST=' | cut -d'=' -f2
+    vhost=$(get_env_value $1 "VIRTUAL_HOST")
+    [ -z "$vhost" ] && vhost=$(get_env_value $1 "PUBLIC_NAME")
+    echo $vhost
 }
 
 get_ip_address() {
@@ -19,9 +25,10 @@ get_ip_address() {
 }
 
 generate_nginx_conf() {
-    echo "Generate nginx configuration"
+    echo "$(date) Generate nginx configuration"
     rm -f "$NGINX_CONF.new"
     echo -e "GET /containers/json HTTP/1.1\r\n" | get_docker | $JQ '.[].Id' | while read container; do
+	echo $container
 	VIRTUAL_HOST=$(get_virtual_host $container)
 	if [ ! -z "$VIRTUAL_HOST" ]; then	
 	    IPADDRESS=$(get_ip_address $container)
@@ -31,7 +38,11 @@ generate_nginx_conf() {
 		sed -e "s/%ip%/$IPADDRESS/" >> "$NGINX_CONF.new"
 	fi
     done
-    mv "$NGINX_CONF.new" "$NGINX_CONF"
+    if [ -f "$NGINX_CONF.new" ]; then
+	mv "$NGINX_CONF.new" "$NGINX_CONF"
+    else
+	echo "*** ERROR: no valid conf generated"
+    fi
 }
 
 is_reload_event() {
