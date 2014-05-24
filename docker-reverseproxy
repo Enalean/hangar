@@ -1,0 +1,11 @@
+upstream docker {
+	server unix:/var/run/docker.sock;
+}
+server {
+	server_name 127.0.0.1;
+	listen 4242;
+	location / {
+    		proxy_pass http://docker;
+		include /etc/nginx/proxy_params;
+	}
+}

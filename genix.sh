@@ -5,13 +5,15 @@ set -e
 DOCKER_HOST=/var/run/docker.sock
 JQ="jq --monochrome-output --raw-output"
 NGINX_CONF=/mnt/proxy
+CURL="curl --silent --show-error"
+
 
 get_docker() {
     nc -U $DOCKER_HOST | sed '1,/^\r$/d'
 }
 
 get_env_value() {
-    echo -e "GET /containers/$1/json HTTP/1.1\r\n" | get_docker | $JQ '.Config.Env[]' | egrep "^$2=" | cut -d'=' -f2
+    $CURL -XGET "http://localhost:4242/containers/$1/json" | $JQ '.Config.Env[]' | egrep "^$2=" | cut -d'=' -f2
 }
 
 get_virtual_host() {
@@ -21,14 +23,14 @@ get_virtual_host() {
 }
 
 get_ip_address() {
-    echo -e "GET /containers/$1/json HTTP/1.1\r\n" | get_docker | $JQ '.NetworkSettings.IPAddress'
+    $CURL -XGET "http://localhost:4242/containers/$1/json" | $JQ '.NetworkSettings.IPAddress'
 }
 
 generate_nginx_conf() {
     echo "$(date) Generate nginx configuration"
     rm -f "$NGINX_CONF.new"
-    echo -e "GET /containers/json HTTP/1.1\r\n" | get_docker | $JQ '.[].Id' | while read container; do
-	echo $container
+    $CURL -XGET "http://localhost:4242/containers/json" | $JQ '.[].Id' | while read container; do
+	echo "Inspect $container"
 	VIRTUAL_HOST=$(get_virtual_host $container)
 	if [ ! -z "$VIRTUAL_HOST" ]; then	
 	    IPADDRESS=$(get_ip_address $container)
@@ -60,6 +62,6 @@ is_reload_event() {
 generate_nginx_conf
 
 # Now listening to docker events and generate conf when needed
-echo -e "GET /events HTTP/1.1\r\n" | nc -U $DOCKER_HOST | while read event; do
-    is_reload_event $event && generate_nginx_conf
-done
+# echo -e "GET /events HTTP/1.1\r\n" | nc -U $DOCKER_HOST | while read event; do
+#     is_reload_event $event && generate_nginx_conf
+# done
